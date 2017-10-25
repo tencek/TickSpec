@@ -5,7 +5,7 @@ open TickSpec.LineParser
 open TickSpec.BlockParser
 
 /// Computes combinations of table values
-let internal computeCombinations (tables:Table []) =    
+let internal computeCombinations (tables:Table []) =
     let rec combinations source =
         match source with
         | [] -> [[]]
@@ -16,7 +16,7 @@ let internal computeCombinations (tables:Table []) =
     
     let processRow rowSet =
         rowSet
-        |> List.fold (fun state (header, rowData) -> 
+        |> List.fold (fun state (header, rowData) ->
             match state with
             | None -> None
             | Some s ->
@@ -53,6 +53,7 @@ let internal computeCombinations (tables:Table []) =
     |> combinations
     |> List.map processRow
     |> List.choose id
+    |> List.distinct
     |> List.map Map.toList
 
 /// Replace line with specified named values
