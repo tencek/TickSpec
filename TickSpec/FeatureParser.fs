@@ -5,51 +5,55 @@ open TickSpec.LineParser
 open TickSpec.BlockParser
 
 /// Computes combinations of table values
-let internal computeCombinations (tables:Table []):((string*string) list list) =
-    // TODO: This method needs to be rewritten
-    // The tables should have also header outside, so it will
-    // be easy to decide which tables to join, which ones to union.
-    // The current implementation does the join. It is also needed
-    // to add the ability to union two tables. The join needs also to
-    // support the join over more than one column.
+let internal computeCombinations (tables:Table []) =    
+    let rec combinations source =
+        match source with
+        | [] -> [[]]
+        | (header, rows) :: xs ->
+            [ for row in rows do
+                for combinedRow in combinations xs ->
+                    (header, row) :: combinedRow ]
     
-    let addCellToExampleRow row (header,value) =
-        let found =
-            row
-            |> List.tryFind (fun (h,_) -> header=h)
+    let processRow rowSet =
+        rowSet
+        |> List.fold (fun state (header, rowData) -> 
+            match state with
+            | None -> None
+            | Some s ->
+                rowData
+                |> Map.fold (fun current c v -> 
+                    match current with
+                    | None -> None
+                    | Some m -> 
+                        let existingValue = m |> Map.tryFind c
+                        match existingValue with
+                        | None -> Some (m.Add (c, v))
+                        | Some v -> Some m
+                        | _ -> None 
+                ) (Some s)
+        ) (Some Map.empty)
 
-        match found with
-        | Some (_,v) ->
-            if v = value then row
-            else row
-        | None -> (header,value) :: row
-
-    let mergeExampleRows row1 row2 =
-        row1
-        |> List.fold addCellToExampleRow row2
-
-    /// Computes all combinations
-    let rec combinations = function
-    | [] -> [[]]
-    | table :: tss ->
-        [ for row1 in table do
-            for row2 in combinations tss ->
-                mergeExampleRows row1 row2 ]
-
-    let values = 
-        tables
-        |> Seq.map (fun table ->
-            table.Rows 
-            |> Array.map (fun row ->
+    tables
+    |> Seq.map 
+        ((fun table -> table.Header, table.Rows) >>
+        (fun (header, rows) -> 
+            header |> Array.toList |> List.sort,
+            rows
+            |> Seq.map (fun row ->
                 row
-                |> Array.mapi (fun i col ->
-                    table.Header.[i],col)
-                |> Array.toList)
-            |> Array.toList
-        )
-        |> Seq.toList
-
-    values |> combinations
+                |> Array.mapi (fun i col -> header.[i], col) |> Map.ofArray)
+        ))
+    // Union tables with the same columns
+    |> Seq.groupBy (fun (header, _) -> header)
+    |> Seq.map (fun (header, tables) ->
+        header,
+        Seq.collect (fun (_, rows) -> rows) tables)
+    |> Seq.toList
+    // Cross-join tables with different columns
+    |> combinations
+    |> List.map processRow
+    |> List.choose id
+    |> List.map Map.toList
 
 /// Replace line with specified named values
 let internal replaceLine (xs:seq<string * string>) (scenario,n,tags,line,step) =
