@@ -9,7 +9,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>FSharp</RootNamespace>
     <AssemblyName>FSharp</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <Name>FSharp</Name>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -63,6 +63,11 @@
       <Project>{97bf4912-2b4e-410b-9b63-5e07076514a9}</Project>
       <Private>True</Private>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="App.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.
