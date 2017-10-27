@@ -28,9 +28,11 @@ and LineSource =
         Doc : string option
     }
 and [<System.Diagnostics.DebuggerStepThrough>]
-    Table (header:string[],rows:string[][]) =    
-    new (header) = Table(header,[|[||]|])
+    Table (header:string[],rows:string[][],tags:string[]) =    
+    new (header, rows) = Table(header,rows,[||])
+    new (header) = Table(header,[|[||]|],[||])
     new () = Table([||]) 
     member table.Header = header
     member table.Rows = rows
+    member table.Tags = tags
     member table.Raw = [|yield header;yield! rows|] 
