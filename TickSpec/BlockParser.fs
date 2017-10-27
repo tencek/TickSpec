@@ -4,7 +4,7 @@ open TickSpec.LineParser
 
 let identity x = x
 
-let mapItems items = 
+let mapItems items tableTags = 
     let items = List.rev items
     match items with
     | x::xs ->
@@ -26,7 +26,8 @@ let mapItems items =
                     | DocString _ -> None
                 )
                 |> List.choose identity
-            None,Some(Table(header,rows |> List.toArray)),None
+            printfn "TABLE %A with %A" header tableTags
+            None,Some(Table(header,rows |> List.toArray,tableTags |> List.toArray)),None
         | DocString _ ->
             let lines =
                items |> List.map (function
@@ -41,71 +42,81 @@ let mapItems items =
 /// Build blocks in specified lines
 let buildBlocks lines =
     // Scan over lines
-    lines
-    |> Seq.scan (fun (block,blockN,lastStep,lastN,tags,tags',_) (lineN,line) ->
-        let step = 
-            match parseLine (lastStep,line) with
-            | Some newStep -> newStep
-            | None -> 
-                let e = expectingLine lastStep
-                let m = sprintf "Syntax error on line %d %s\r\n%s" lineN line e
-                StepException(m,lineN,block.ToString()) |> raise
-        match step with
-        | TagLine tag ->
-            block, blockN, step, lineN, tag@tags, tags', None
-        | BlockStart block -> 
-            block, blockN+1, step, lineN, [], tags, None
-        | ExamplesStart | Step _ ->
-            block, blockN, step, lineN, tags, tags', 
-                Some(block,blockN,tags',lineN,line,step) 
-        | Item _ ->
-            block, blockN, step, lastN, tags, tags', 
-                Some(block,blockN,tags',lastN,line,step)
-    ) (Background,0,BlockStart(Background),0,[],[],None)
-    // Handle tables
-    |> Seq.choose (fun (_,_,_,_,_,_,step) -> step)
-    |> Seq.groupBy (fun (_,_,_,lineN,_,_) -> lineN)    
-    |> Seq.map (fun (line,items) ->
-        items |> Seq.fold (fun (text,row,table) (block,blockN,tags,lineN,line,step) ->
-            let text = if String.length text = 0 then line else text + "\r\n" + line            
+    let _x = 
+        lines
+        |> Seq.scan (fun (block,blockN,lastStep,lastN,lastTags,tags,tags',_) (lineN,line) ->
+            let step = 
+                match parseLine (lastStep,line) with
+                | Some newStep -> newStep
+                | None -> 
+                    let e = expectingLine lastStep
+                    let m = sprintf "Syntax error on line %d %s\r\n%s" lineN line e
+                    StepException(m,lineN,block.ToString()) |> raise
+            //printfn "Line %d: %A: %s" lineN step line
             match step with
-            | BlockStart (Shared _)
+            | TagLine tag ->
+                block, blockN, step, lineN, tag, tag@tags, tags', None
+            | BlockStart block -> 
+                block, blockN+1, step, lineN, [],  [], tags, None
             | ExamplesStart | Step _ ->
-                text, (block,blockN,tags,lineN,line,step), table
-            | Item (BlockStart (Shared _),item) ->
-                text, (block,blockN,tags,lineN,line,step), item::table
-            | Item (_,item) ->
-                text, row, item::table
-            | BlockStart _ | TagLine _ -> 
-                invalidOp "Unexpected token"
-        ) ("",(Background,0,[],0,"",BlockStart(Background)),[])
-        |> (fun (text, line, items) -> text, line, mapItems items)
-    )
-    // Map to lines
-    |> Seq.map (fun (text, (block,blockN,tags,n,line,step), (bullets,table,doc)) ->
-        let line = {Number=n;Text=text;Bullets=bullets;Table=table;Doc=doc}
-        block,blockN,tags,line,step
-    )
-    // Group into blocks
-    |> Seq.groupBy (fun (block,n,tags,_,_) -> (block,n,tags))
-    |> (fun (blocks) ->
-        let blocks = Seq.cache blocks
-        let names = blocks |> Seq.map (fun ((name,_,_),_) -> name)
-        blocks |> Seq.mapi (fun i ((name,_,tags),lines) ->
-            let names = names |> Seq.take (i+1)
-            let count = names |> Seq.filter ((=) name) |> Seq.length
-            let name = 
-                if count = 1 then name 
-                else
-                    match name with
-                    | Background ->
-                        let message = "Multiple Backgrounds not supported"
-                        raise (new System.NotSupportedException(message))
-                    | Named text -> Named (sprintf "%s~%d" text count)
-                    | Shared tag -> Shared tag
-            (name,tags),lines
+                block, blockN, step, lineN, [], tags, tags', Some(block,blockN,lastTags,tags',lineN,line,step) 
+            | Item _ ->
+                block, blockN, step, lastN, [], tags, tags', Some(block,blockN,[],tags',lastN,line,step)
+        ) (Background,0,BlockStart(Background),0,[],[],[],None)
+        // Handle tables
+        |> Seq.choose (fun (_,_,_,_,_,_,_,step) -> step)
+        |> Seq.groupBy (fun (_,_,_,_,lineN,_,_) -> lineN)    
+        |> Seq.map (fun (_lineN,items) ->
+            items |> Seq.fold (fun (text,row,table) (block,blockN,tableTags,tags,lineN,line,step) ->
+                let text = if String.length text = 0 then line else text + "\r\n" + line            
+                match step with
+                | BlockStart (Shared _)
+                | ExamplesStart | Step _ ->
+                    text, (block,blockN,tableTags,tags,lineN,line,step), table
+                | Item (BlockStart (Shared _),item) ->
+                    text, (block,blockN,tableTags,tags,lineN,line,step), item::table
+                | Item (_,item) ->
+                    text, row, item::table
+                | BlockStart _ | TagLine _ -> 
+                    invalidOp "Unexpected token"
+            ) ("",(Background,0,[],[],0,"",BlockStart(Background)),[])        
+            |> (fun (text, row, items) -> 
+                let _,_,tableTags,_,_,_,_ = row
+                text, row, (mapItems items tableTags)
+                )
+            //here, after the mapItems  call, we would like to add tags probably
         )
-    )
+    _x |> Seq.length |> printfn "!!!!!!!!!!!!!!! SEQ size %d"
+    let _y = 
+        _x
+
+        // Map to lines
+        |> Seq.map (fun (text, (block,blockN,tableTags,tags,n,line,step), (bullets,table,doc)) ->
+            let line = {Number=n;Text=text;Bullets=bullets;Table=table;Doc=doc}
+            block,blockN,tags,line,step
+        )
+        // Group into blocks
+        |> Seq.groupBy (fun (block,n,tags,_,_) -> (block,n,tags))
+        |> (fun (blocks) ->
+            let blocks = Seq.cache blocks
+            let names = blocks |> Seq.map (fun ((name,_,_),_) -> name)
+            blocks |> Seq.mapi (fun i ((name,_,tags),lines) ->
+                let names = names |> Seq.take (i+1)
+                let count = names |> Seq.filter ((=) name) |> Seq.length
+                let name = 
+                    if count = 1 then name 
+                    else
+                        match name with
+                        | Background ->
+                            let message = "Multiple Backgrounds not supported"
+                            raise (new System.NotSupportedException(message))
+                        | Named text -> Named (sprintf "%s~%d" text count)
+                        | Shared tag -> Shared tag
+                (name,tags),lines
+            )
+        )
+    _y |> Seq.length |> printfn "!!!!!!!!!!!!!!! SEQ size %d"
+    _y    
     // Handle examples
     |> Seq.map (fun (block,lines) -> 
         block,
