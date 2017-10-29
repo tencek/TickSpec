@@ -4,7 +4,7 @@ open TickSpec.LineParser
 
 let identity x = x
 
-let mapItems items = 
+let mapItems items tableTags = 
     let items = List.rev items
     match items with
     | x::xs ->
@@ -26,7 +26,7 @@ let mapItems items =
                     | DocString _ -> None
                 )
                 |> List.choose identity
-            None,Some(Table(header,rows |> List.toArray)),None
+            None,Some(Table(header,rows |> List.toArray,tableTags |> List.toArray)),None
         | DocString _ ->
             let lines =
                items |> List.map (function
@@ -42,7 +42,7 @@ let mapItems items =
 let buildBlocks lines =
     // Scan over lines
     lines
-    |> Seq.scan (fun (block,blockN,lastStep,lastN,tags,tags',_) (lineN,line) ->
+    |> Seq.scan (fun (block,blockN,lastStep,lastN,lastTags,tags,tags',_) (lineN,line) ->
         let step = 
             match parseLine (lastStep,line) with
             | Some newStep -> newStep
@@ -51,38 +51,41 @@ let buildBlocks lines =
                 let m = sprintf "Syntax error on line %d %s\r\n%s" lineN line e
                 StepException(m,lineN,block.ToString()) |> raise
         match step with
-        | TagLine tag ->
-            block, blockN, step, lineN, tag@tags, tags', None
+        | TagLine lineTags ->
+            block, blockN, step, lineN, lineTags, lineTags@tags, tags', None
         | BlockStart block -> 
-            block, blockN+1, step, lineN, [], tags, None
-        | ExamplesStart | Step _ ->
-            block, blockN, step, lineN, tags, tags', 
-                Some(block,blockN,tags',lineN,line,step) 
+            block, blockN+1, step, lineN, [],  [], tags, None
+        | ExamplesStart ->
+            block, blockN, step, lineN, [], tags, tags', Some(block,blockN,lastTags,tags',lineN,line,step) 
+        | Step _ ->
+            block, blockN, step, lineN, [], tags, tags', Some(block,blockN,[],tags',lineN,line,step)
         | Item _ ->
-            block, blockN, step, lastN, tags, tags', 
-                Some(block,blockN,tags',lastN,line,step)
-    ) (Background,0,BlockStart(Background),0,[],[],None)
+            block, blockN, step, lastN, [], tags, tags', Some(block,blockN,[],tags',lastN,line,step)
+    ) (Background,0,BlockStart(Background),0,[],[],[],None)
     // Handle tables
-    |> Seq.choose (fun (_,_,_,_,_,_,step) -> step)
-    |> Seq.groupBy (fun (_,_,_,lineN,_,_) -> lineN)    
-    |> Seq.map (fun (line,items) ->
-        items |> Seq.fold (fun (text,row,table) (block,blockN,tags,lineN,line,step) ->
+    |> Seq.choose (fun (_,_,_,_,_,_,_,step) -> step)
+    |> Seq.groupBy (fun (_,_,_,_,lineN,_,_) -> lineN)    
+    |> Seq.map (fun (_lineN,items) ->
+        items |> Seq.fold (fun (text,row,table) (block,blockN,tableTags,tags,lineN,line,step) ->
             let text = if String.length text = 0 then line else text + "\r\n" + line            
             match step with
             | BlockStart (Shared _)
             | ExamplesStart | Step _ ->
-                text, (block,blockN,tags,lineN,line,step), table
+                text, (block,blockN,tableTags,tags,lineN,line,step), table
             | Item (BlockStart (Shared _),item) ->
-                text, (block,blockN,tags,lineN,line,step), item::table
+                text, (block,blockN,tableTags,tags,lineN,line,step), item::table
             | Item (_,item) ->
                 text, row, item::table
             | BlockStart _ | TagLine _ -> 
                 invalidOp "Unexpected token"
-        ) ("",(Background,0,[],0,"",BlockStart(Background)),[])
-        |> (fun (text, line, items) -> text, line, mapItems items)
+        ) ("",(Background,0,[],[],0,"",BlockStart(Background)),[])        
+        |> (fun (text, line, items) -> 
+            let _,_,tableTags,_,_,_,_ = line
+            text, line, (mapItems items tableTags)
+            )
     )
     // Map to lines
-    |> Seq.map (fun (text, (block,blockN,tags,n,line,step), (bullets,table,doc)) ->
+    |> Seq.map (fun (text, (block,blockN,_,tags,n,line,step), (bullets,table,doc)) ->
         let line = {Number=n;Text=text;Bullets=bullets;Table=table;Doc=doc}
         block,blockN,tags,line,step
     )
