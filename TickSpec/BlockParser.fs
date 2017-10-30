@@ -73,7 +73,7 @@ let buildBlocks lines =
             | ExamplesStart | Step _ ->
                 text, (block,blockN,tableTags,tags,lineN,line,step), table
             | Item (BlockStart (Shared _),item) ->
-                text, (block,blockN,tableTags,tags,lineN,line,step), item::table
+                text, (block,blockN,tags,tags,lineN,line,step), item::table
             | Item (_,item) ->
                 text, row, item::table
             | BlockStart _ | TagLine _ -> 
