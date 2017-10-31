@@ -19,29 +19,36 @@ let internal computeCombinations (tables:Table []) =
         |> List.fold (fun state (header, rowData) ->
             match state with
             | None -> None
-            | Some s ->
-                rowData
-                |> Map.fold (fun current c v -> 
-                    match current with
-                    | None -> None
-                    | Some m -> 
-                        let existingValue = m |> Map.tryFind c
-                        match existingValue with
-                        | None -> Some (m.Add (c, v))
-                        | Some v -> Some m
-                        | _ -> None 
-                ) (Some s)
-        ) (Some Map.empty)
-
+            | Some (tag, s) ->
+                rowData |> 
+                ( fun (tag, rowMap) ->
+                    rowMap
+                    |> Map.fold (fun current c v -> 
+                        match current with
+                        | None -> None
+                        | Some (tag, m) -> 
+                            let existingValue = m |> Map.tryFind c
+                            match existingValue with
+                            | None -> Some (tag, m.Add (c, v))
+                            | Some v -> Some (tag, m)
+                    ) (Some (tag, s))
+                )
+        ) (Some (None, Map.empty))
+    
     tables
     |> Seq.map 
-        ((fun table -> table.Header, table.Rows) >>
-        (fun (header, rows) -> 
+        ((fun table -> table.Header, table.Tags, table.Rows) >>
+        (fun (header, tags, rows) -> 
             header |> Array.toList |> List.sort,
             rows
             |> Seq.map (fun row ->
                 row
                 |> Array.mapi (fun i col -> header.[i], col) |> Map.ofArray)
+            |> Seq.collect (fun mappedRow -> 
+                tags 
+                |> Array.map( fun tag -> Some(tag)) 
+                |> Array.append [| None |]
+                |> Array.map (fun tag -> (tag, mappedRow)))
         ))
     // Union tables with the same columns
     |> Seq.groupBy (fun (header, _) -> header)
@@ -53,8 +60,19 @@ let internal computeCombinations (tables:Table []) =
     |> combinations
     |> List.map processRow
     |> List.choose id
-    |> List.distinct
-    |> List.map Map.toList
+    |> List.groupBy (fun (_tag, row) -> row)
+    |> List.map (fun (row, taggedRow) -> 
+        taggedRow |> List.fold( fun tags taggedRow -> 
+            match taggedRow with
+            | (Some tag, _) -> Seq.append tags [tag]
+            | _ -> tags
+        ) Seq.empty,
+        row
+    )
+    |> List.map ( fun (tags,rows) ->
+        tags,
+        rows |> Map.toList
+    )
 
 /// Replace line with specified named values
 let internal replaceLine (xs:seq<string * string>) (scenario,n,tags,line,step) =
@@ -113,10 +131,11 @@ let parseFeature (lines:string[]) =
                     { Name=name; Tags=tags; Steps=steps; Parameters=[||] }
             | name,tags,steps,Some(exampleTables) ->
                 /// All combinations of tables
-                let combinations = computeCombinations exampleTables
+                let taggedCombinations = computeCombinations exampleTables
                 // Execute each combination
-                combinations |> Seq.mapi (fun i combination ->
+                taggedCombinations |> Seq.mapi (fun i (tableTags, combination) ->
                     let name = sprintf "%s(%d)" name i
+                    let tags = Array.append tags (tableTags |> Seq.toArray) 
                     let combination = combination |> Seq.toArray
                     let steps =
                         Seq.append background steps
