@@ -58,9 +58,8 @@ let internal computeCombinations (tables:Table []) =
     |> List.groupBy (fun (_tag, row) -> row)
     |> List.map (fun (row, taggedRow) -> 
         taggedRow 
-        |> List.fold( fun tags taggedRow -> 
-            match taggedRow with
-            | (rowTags, _) -> List.append tags rowTags
+        |> List.fold( fun tags (rowTags, _row) ->
+            List.append tags rowTags
         ) List.empty,
         row
     )
