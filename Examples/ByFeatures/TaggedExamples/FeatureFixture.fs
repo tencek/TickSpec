@@ -16,8 +16,6 @@ type FeatureFixture (source:string) =
         scenario.Action.Invoke()
 
     member this.Scenarios =
-        let assembly = Assembly.GetExecutingAssembly() 
-        let definitions = new StepDefinitions(assembly)
         let replaceParameterInScenarioName (scenarioName:string) parameter =
             scenarioName.Replace("<" + fst parameter + ">", snd parameter)
         let enhanceScenarioName parameters scenarioName =
@@ -36,9 +34,8 @@ type FeatureFixture (source:string) =
             feature.Scenarios
             |> Seq.map (createTestCaseData feature)
 
-        assembly.GetManifestResourceNames()
-        |> Seq.filter (fun (n:string) -> n.EndsWith(".feature") )
-        |> Seq.map (fun n -> (n, assembly.GetManifestResourceStream(n)))
-        |> Seq.map (fun (n, r) -> definitions.GenerateFeature(n,r))
-        |> Seq.map createFeatureData
-        |> Seq.concat
+        let assembly = Assembly.GetExecutingAssembly() 
+        let definitions = new StepDefinitions(assembly)
+        let featureStream = assembly.GetManifestResourceStream(source)   
+        let feature = definitions.GenerateFeature(source,featureStream)
+        createFeatureData feature
