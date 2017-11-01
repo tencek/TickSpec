@@ -57,11 +57,11 @@ let internal computeCombinations (tables:Table []) =
     |> List.choose id
     |> List.groupBy (fun (_tag, row) -> row)
     |> List.map (fun (row, taggedRow) -> 
-        taggedRow |> List.fold( fun tags taggedRow -> 
+        taggedRow 
+        |> List.fold( fun tags taggedRow -> 
             match taggedRow with
-            | (rowTags, _) -> Seq.append tags rowTags
-            | _ -> tags
-        ) Seq.empty,
+            | (rowTags, _) -> List.append tags rowTags
+        ) List.empty,
         row
     )
     |> List.map ( fun (tags,rows) ->
@@ -130,7 +130,7 @@ let parseFeature (lines:string[]) =
                 // Execute each combination
                 taggedCombinations |> Seq.mapi (fun i (tableTags, combination) ->
                     let name = sprintf "%s(%d)" name i
-                    let tags = Array.append tags (tableTags |> Seq.toArray) 
+                    let tags = Array.append tags (tableTags |> List.toArray) 
                     let combination = combination |> Seq.toArray
                     let steps =
                         Seq.append background steps
