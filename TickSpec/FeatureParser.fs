@@ -16,24 +16,24 @@ let internal computeCombinations (tables:Table []) =
     
     let processRow rowSet =
         rowSet
-        |> List.fold (fun state (header, rowData) ->
+        |> List.fold (fun state (_header, rowData) ->
             match state with
             | None -> None
-            | Some (tag, s) ->
+            | Some (_tags, s) ->
                 rowData |> 
-                ( fun (tag, rowMap) ->
+                ( fun (tags, rowMap) ->
                     rowMap
-                    |> Map.fold (fun current c v -> 
-                        match current with
+                    |> Map.fold (fun currentRow key value -> 
+                        match currentRow with
                         | None -> None
-                        | Some (tag, m) -> 
-                            let existingValue = m |> Map.tryFind c
+                        | Some (tags, rowMap) -> 
+                            let existingValue = rowMap |> Map.tryFind key
                             match existingValue with
-                            | None -> Some (tag, m.Add (c, v))
-                            | Some v -> Some (tag, m)
-                    ) (Some (tag, s))
+                            | None -> Some (tags, rowMap.Add (key, value))
+                            | Some _value -> Some (tags, rowMap)
+                    ) (Some (tags, s))
                 )
-        ) (Some (None, Map.empty))
+        ) (Some (List.Empty, Map.empty))
     
     tables
     |> Seq.map 
@@ -42,13 +42,8 @@ let internal computeCombinations (tables:Table []) =
             header |> Array.toList |> List.sort,
             rows
             |> Seq.map (fun row ->
-                row
-                |> Array.mapi (fun i col -> header.[i], col) |> Map.ofArray)
-            |> Seq.collect (fun mappedRow -> 
-                tags 
-                |> Array.map( fun tag -> Some(tag)) 
-                |> Array.append [| None |]
-                |> Array.map (fun tag -> (tag, mappedRow)))
+                tags |> Array.toList |> List.sort,
+                row |> Array.mapi (fun i col -> header.[i], col) |> Map.ofArray)
         ))
     // Union tables with the same columns
     |> Seq.groupBy (fun (header, _) -> header)
@@ -64,7 +59,7 @@ let internal computeCombinations (tables:Table []) =
     |> List.map (fun (row, taggedRow) -> 
         taggedRow |> List.fold( fun tags taggedRow -> 
             match taggedRow with
-            | (Some tag, _) -> Seq.append tags [tag]
+            | (rowTags, _) -> Seq.append tags rowTags
             | _ -> tags
         ) Seq.empty,
         row
