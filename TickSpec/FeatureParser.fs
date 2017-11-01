@@ -19,22 +19,29 @@ let internal computeCombinations (tables:Table []) =
         |> List.fold (fun state (_header, rowData) ->
             match state with
             | None -> None
-            | Some (_tags, s) ->
+            | Some (stateTags, stateMap) ->
                 rowData |> 
-                ( fun (tags, rowMap) ->
-                    rowMap
-                    |> Map.fold (fun currentRow key value -> 
-                        match currentRow with
-                        | None -> None
-                        | Some (tags, rowMap) -> 
-                            let existingValue = rowMap |> Map.tryFind key
-                            match existingValue with
-                            | None -> Some (tags, rowMap.Add (key, value))
-                            | Some _value -> Some (tags, rowMap)
-                    ) (Some (tags, s))
+                ( fun (rowTags, rowMap) ->                
+                    let newStateMap =
+                        rowMap
+                        |> Map.fold (fun state key value -> 
+                            match state with
+                            | None -> None
+                            | Some map -> 
+                                let existingValue = map |> Map.tryFind key
+                                match existingValue with
+                                | None -> Some (map.Add (key, value))
+                                | Some x when x = value -> Some map
+                                | _ -> None 
+                        ) (Some stateMap)
+                    match newStateMap with
+                    | Some stateMap -> 
+                        let newStateTags = List.append stateTags rowTags
+                        Some (newStateTags, stateMap)
+                    | None -> None                
                 )
         ) (Some (List.Empty, Map.empty))
-    
+
     tables
     |> Seq.map 
         ((fun table -> table.Header, table.Tags, table.Rows) >>
@@ -107,7 +114,7 @@ let internal appendSharedExamples (sharedExamples:Table[]) scenarios  =
             | scenarioName,tags,steps,Some(exampleTables) ->
                 scenarioName,tags,steps,Some(Array.append exampleTables sharedExamples)
         )
-          
+
 /// Parses lines of feature
 let parseFeature (lines:string[]) =
     let toStep (_,_,_,line,step) = step,line
