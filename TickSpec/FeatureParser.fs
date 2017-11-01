@@ -55,7 +55,7 @@ let internal computeCombinations (tables:Table []) =
     |> combinations
     |> List.map processRow
     |> List.choose id
-    |> List.groupBy (fun (_tag, row) -> row)
+    |> List.groupBy (fun (_tags, row) -> row)
     |> List.map (fun (row, taggedRow) -> 
         taggedRow 
         |> List.fold( fun tags (rowTags, _row) ->
