@@ -16,20 +16,15 @@ type FeatureFixture (source:string) =
         scenario.Action.Invoke()
 
     member this.Scenarios =
-        let replaceParameterInScenarioName (scenarioName:string) parameter =
-            scenarioName.Replace("<" + fst parameter + ">", snd parameter)
-        let enhanceScenarioName parameters scenarioName =
-            parameters
-            |> Seq.fold replaceParameterInScenarioName scenarioName
         let createTestCaseData (feature:Feature) (scenario:Scenario) =
-            let testCaseData = new TestCaseData(scenario)
-            testCaseData.SetName(enhanceScenarioName scenario.Parameters scenario.Name) |> ignore
-            testCaseData.SetProperty("Feature", feature.Name.Substring(9)) |> ignore
-            scenario.Tags
-                |> Array.iteri (fun i tag -> 
-                    testCaseData.SetProperty(sprintf "Tag%d" i, tag) |> ignore
-                )
-            testCaseData
+            let tags = 
+                scenario.Tags 
+                |> Array.fold (fun tags tag -> tags + tag + " " ) ""
+            (new TestCaseData(scenario))
+                .SetName(scenario.Name)
+                .SetProperty("Feature", feature.Name.Substring("Feature: ".Length))
+                .SetProperty("Tags", tags.TrimEnd())
+        
         let createFeatureData (feature:Feature) =
             feature.Scenarios
             |> Seq.map (createTestCaseData feature)
